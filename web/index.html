@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mac Manager</title>
+  <style>
+    :root { --bg:#f6f8fc; --ink:#17213a; --muted:#69758d; --line:#e2e7f0; --blue:#355cf6; --red:#c73850; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .wrap { max-width: 1220px; margin: auto; padding: 46px 22px 70px; }
+    .top, .section { display: flex; justify-content: space-between; gap: 18px; }
+    .top { align-items: end; }
+    .kicker { color: var(--blue); font-size: 11px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+    h1 { margin: 7px 0; font-size: 38px; letter-spacing: -1.4px; }
+    .lead, p { color: var(--muted); margin: 0; }
+    .updated { margin-top: 8px; font-size: 12px; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 28px 0 18px; }
+    .stat, .card { background: #fff; border: 1px solid var(--line); border-radius: 15px; }
+    .stat { padding: 17px; }
+    .stat small { color: var(--muted); }
+    .stat b { display: block; font-size: 28px; margin-top: 7px; letter-spacing: -0.6px; }
+    .stat em { font-style: normal; color: var(--muted); font-size: 16px; font-weight: 650; }
+    .card { padding: 20px; margin-top: 17px; overflow-x: auto; }
+    .section { align-items: center; margin-bottom: 16px; }
+    .section h2 { font-size: 18px; margin: 0 0 4px; }
+    .section p { font-size: 13px; }
+    .filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+    .filters button { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; font-weight: 650; color: #34425f; cursor: pointer; }
+    .filters button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .filters button span { opacity: .65; margin-left: 4px; }
+    .button { border: 0; border-radius: 8px; padding: 8px 11px; cursor: pointer; font-weight: 650; }
+    .primary { background: var(--blue); color: white; }
+    .quiet { background: #edf1f8; color: #34425f; }
+    .danger { background: #fff0f2; color: var(--red); }
+    .note { background: #f5f7fb; border-left: 3px solid #9daac4; padding: 10px 12px; color: #53617a; font-size: 12px; margin: 0 0 14px; border-radius: 0 8px 8px 0; }
+    .alerts { display: grid; gap: 8px; margin-bottom: 14px; }
+    .alerts:empty { display: none; }
+    .alert { background: #fff8ee; border-left: 3px solid #c88820; padding: 10px 12px; color: #6d4e12; font-size: 12px; border-radius: 0 8px 8px 0; }
+    table { border-collapse: collapse; width: 100%; min-width: 640px; }
+    th { text-align: left; color: #7e899e; font-size: 11px; text-transform: uppercase; padding: 0 8px 10px; }
+    td { border-top: 1px solid var(--line); padding: 12px 8px; vertical-align: middle; }
+    th.actions, td.actions { position: sticky; right: 0; background: #fff; box-shadow: -10px 0 10px -10px rgba(23, 33, 58, .18); }
+    .name { font-weight: 700; }
+    .sub { font-size: 12px; color: #78849a; margin-top: 3px; max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tag { background: #eef2f8; border-radius: 99px; padding: 4px 7px; font-size: 11px; }
+    .status { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; white-space: nowrap; }
+    .status i { width: 8px; height: 8px; border-radius: 99px; background: currentColor; display: block; }
+    .ok { color: #14835e; }
+    .warn { color: #966700; }
+    .bad { color: var(--red); }
+    .muted { color: #69758d; }
+    .actions { display: flex; justify-content: flex-end; gap: 6px; white-space: nowrap; }
+    .empty { text-align: center; color: var(--muted); padding: 24px; }
+    input { border: 1px solid #dce3ee; border-radius: 8px; padding: 9px 11px; min-width: 230px; }
+    .toast { display: none; position: fixed; bottom: 22px; right: 22px; max-width: 360px; padding: 12px 15px; background: #1e2a46; color: white; border-radius: 9px; }
+    .toast.show { display: block; }
+    details summary { cursor: pointer; color: #53617a; font-weight: 700; margin-bottom: 12px; }
+    @media (max-width: 700px) {
+      .wrap { padding: 28px 13px; }
+      .top, .section { align-items: start; flex-direction: column; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      h1 { font-size: 31px; }
+      input { min-width: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <div>
+        <div class="kicker">Mac Manager · local only</div>
+        <h1>Everything you installed, in one place.</h1>
+        <p class="lead">Apps, Homebrew services, and Docker containers, with status and the controls to start or stop them.</p>
+        <p class="updated" id="updated">Loading…</p>
+      </div>
+      <button class="button primary" id="refresh" type="button">Refresh</button>
+    </header>
+
+    <section class="stats">
+      <div class="stat"><small>Apps running</small><b id="apps-stat">—</b></div>
+      <div class="stat"><small>Homebrew services</small><b id="brew-stat">—</b></div>
+      <div class="stat"><small>Docker containers</small><b id="docker-stat">—</b></div>
+      <div class="stat"><small>Your CPU</small><b id="cpu-stat">—</b></div>
+    </section>
+
+    <section class="card">
+      <div class="section">
+        <div>
+          <h2>Programs</h2>
+          <p>User-installed apps, Homebrew packages, services, and every Docker container.</p>
+        </div>
+        <input id="filter" type="search" placeholder="Search programs" autocomplete="off">
+      </div>
+      <div class="note">Quit and Stop ask the program to exit. Remove uninstalls a Homebrew package you installed and leaves config files in your home folder. Apple system apps stay hidden.</div>
+      <div class="alerts" id="alerts"></div>
+      <div class="filters" id="filters">
+        <button type="button" data-tab="all">All <span id="count-all">0</span></button>
+        <button type="button" data-tab="apps">Apps <span id="count-apps">0</span></button>
+        <button type="button" data-tab="homebrew">Homebrew <span id="count-homebrew">0</span></button>
+        <button type="button" data-tab="docker">Docker <span id="count-docker">0</span></button>
+      </div>
+      <div id="programs"><div class="empty">Loading programs…</div></div>
+    </section>
+
+    <section class="card">
+      <details id="mine-details">
+        <summary>Your running processes (<span id="mine-detail">0</span>)</summary>
+        <div class="section">
+          <p id="memory-stat">Apps, tools, and services owned by your signed-in account.</p>
+          <input id="process-filter" type="search" placeholder="Search your processes" autocomplete="off">
+        </div>
+        <div id="mine"></div>
+      </details>
+    </section>
+
+    <section class="card">
+      <details id="system-details">
+        <summary>macOS and background processes (<span id="system-detail">0</span>)</summary>
+        <div class="note">These processes are view-only. They belong to macOS, root, or another account.</div>
+        <div id="system"></div>
+      </details>
+    </section>
+  </main>
+  <div class="toast" id="toast"></div>
+  <script>
+    const state = { programs: [], processes: [], tab: "all", brewOk: true, dockerOk: true, brewMessage: "", dockerMessage: "", updatedAt: "" };
+    const labels = { open: "Open", quit: "Quit", start: "Start", stop: "Stop", restart: "Restart", uninstall: "Remove" };
+    const classes = { open: "primary", quit: "quiet", start: "primary", stop: "quiet", restart: "quiet", uninstall: "danger" };
+    const brewKinds = { Formula: true, Service: true, Cask: true };
+
+    const escapeHTML = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[ch]));
+
+    function memoryLabel(mb) {
+      if (mb >= 1024) return (mb / 1024).toFixed(1) + " GB";
+      return Math.round(mb) + " MB";
+    }
+
+    function notice(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.className = "toast show";
+      clearTimeout(notice.timer);
+      notice.timer = setTimeout(() => { toast.className = "toast"; }, 4200);
+    }
+
+    function programsInTab(tab) {
+      return state.programs.filter((program) => {
+        if (tab === "apps") return program.kind === "App";
+        if (tab === "homebrew") return brewKinds[program.kind];
+        if (tab === "docker") return program.kind === "Docker";
+        return true;
+      });
+    }
+
+    function visiblePrograms() {
+      const query = document.getElementById("filter").value.toLowerCase();
+      return programsInTab(state.tab).filter((program) => {
+        const haystack = [program.name, program.kind, program.status, program.detail, program.version].join(" ").toLowerCase();
+        return haystack.includes(query);
+      });
+    }
+
+    function actionButtons(item) {
+      return (item.actions || []).map((action) =>
+        '<button type="button" class="button ' + classes[action] + '" data-action="' + action + '" data-id="' + escapeHTML(item.id) + '" data-name="' + escapeHTML(item.name) + '">' + labels[action] + "</button>"
+      ).join("");
+    }
+
+    function programTable(rows) {
+      if (!rows.length) return '<div class="empty">Nothing matches this view.</div>';
+      return '<table><thead><tr><th>Program</th><th>Kind</th><th>Status</th><th>CPU</th><th>Memory</th><th class="actions"></th></tr></thead><tbody>' +
+        rows.map((program) => {
+          const cpu = program.status === "Running" || program.status === "Restarting" || program.cpu > 0 ? program.cpu.toFixed(1) + "%" : "—";
+          const memory = program.memoryMB > 0 ? memoryLabel(program.memoryMB) : "—";
+          return '<tr><td><div class="name">' + escapeHTML(program.name) + '</div><div class="sub" title="' + escapeHTML(program.hint || program.detail) + '">' + escapeHTML(program.detail || "") + "</div></td>" +
+            "<td><span class=\"tag\">" + escapeHTML(program.kind) + "</span></td>" +
+            '<td><span class="status ' + escapeHTML(program.tone) + '"><i></i>' + escapeHTML(program.status) + "</span></td>" +
+            "<td>" + cpu + "</td><td>" + memory + "</td>" +
+            '<td class="actions">' + actionButtons(program) + "</td></tr>";
+        }).join("") + "</tbody></table>";
+    }
+
+    function processTable(rows) {
+      if (!rows.length) return '<div class="empty">Nothing is running here.</div>';
+      return '<table><thead><tr><th>Process</th><th>Type</th><th>CPU</th><th>Memory</th><th>Uptime</th><th class="actions"></th></tr></thead><tbody>' +
+        rows.map((process) => '<tr><td><div class="name">' + escapeHTML(process.name) + '</div><div class="sub" title="' + escapeHTML(process.command) + '">' + escapeHTML(process.command) + "</div></td>" +
+          "<td><span class=\"tag\">" + escapeHTML(process.kind) + "</span></td>" +
+          "<td>" + process.cpu.toFixed(1) + "%</td><td>" + memoryLabel(process.memoryMB) + "</td><td>" + escapeHTML(process.uptime) + "</td>" +
+          '<td class="actions">' + (process.canStop ? actionButtons({ id: process.id, name: process.name, actions: ["stop"] }) : "") + "</td></tr>"
+        ).join("") + "</tbody></table>";
+    }
+
+    function yourProcesses() {
+      return state.processes.filter((process) => process.owner === "You");
+    }
+
+    function renderProcesses() {
+      const mine = yourProcesses();
+      document.getElementById("mine-detail").textContent = mine.length;
+      const details = document.getElementById("mine-details");
+      if (!details.open) {
+        document.getElementById("mine").innerHTML = "";
+        return;
+      }
+      const query = document.getElementById("process-filter").value.toLowerCase();
+      const rows = mine.filter((process) => (process.name + " " + process.command + " " + process.kind).toLowerCase().includes(query));
+      document.getElementById("mine").innerHTML = processTable(rows);
+    }
+
+    function renderSystem() {
+      const system = state.processes.filter((process) => process.owner !== "You");
+      document.getElementById("system-detail").textContent = system.length;
+      const details = document.getElementById("system-details");
+      if (!details.open) {
+        document.getElementById("system").innerHTML = "";
+        return;
+      }
+      document.getElementById("system").innerHTML = processTable(system);
+    }
+
+    function ratio(running, total) {
+      return running + ' <em>/ ' + total + "</em>";
+    }
+
+    function render() {
+      state.programs = Array.isArray(state.programs) ? state.programs : [];
+      state.processes = Array.isArray(state.processes) ? state.processes : [];
+      const apps = state.programs.filter((program) => program.kind === "App");
+      const services = state.programs.filter((program) => program.kind === "Service");
+      const containers = state.programs.filter((program) => program.kind === "Docker");
+      const mine = yourProcesses();
+      const running = (rows) => rows.filter((row) => row.status === "Running").length;
+
+      document.getElementById("apps-stat").innerHTML = ratio(running(apps), apps.length);
+      document.getElementById("brew-stat").innerHTML = ratio(running(services), services.length);
+      document.getElementById("docker-stat").innerHTML = ratio(running(containers), containers.length);
+      document.getElementById("cpu-stat").textContent = mine.reduce((sum, process) => sum + process.cpu, 0).toFixed(1) + "%";
+      const used = mine.reduce((sum, process) => sum + process.memoryMB, 0);
+      document.getElementById("memory-stat").textContent = mine.length
+        ? "Apps, tools, and services owned by your signed-in account. Using " + memoryLabel(used) + "."
+        : "Apps, tools, and services owned by your signed-in account.";
+
+      document.getElementById("count-all").textContent = state.programs.length;
+      document.getElementById("count-apps").textContent = apps.length;
+      document.getElementById("count-homebrew").textContent = programsInTab("homebrew").length;
+      document.getElementById("count-docker").textContent = containers.length;
+      document.querySelectorAll("[data-tab]").forEach((button) => button.classList.toggle("on", button.dataset.tab === state.tab));
+
+      const alerts = [];
+      if (!state.brewOk && state.brewMessage) alerts.push("Homebrew: " + state.brewMessage);
+      if (!state.dockerOk && state.dockerMessage) alerts.push("Docker: " + state.dockerMessage);
+      document.getElementById("alerts").innerHTML = alerts.map((message) => '<div class="alert">' + escapeHTML(message) + "</div>").join("");
+      document.getElementById("programs").innerHTML = programTable(visiblePrograms());
+      renderSystem();
+      if (state.updatedAt) {
+        document.getElementById("updated").textContent = "Updated " + new Date(state.updatedAt).toLocaleTimeString();
+      }
+      renderProcesses();
+    }
+
+    async function request(url, body) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const payload = await response.json();
+      if (!response.ok) throw Error(payload.error || "Action failed");
+      return payload;
+    }
+
+    async function runAction(action, id, name) {
+      const prompts = {
+        quit: "Quit “" + name + "”?",
+        stop: "Stop “" + name + "”?",
+        restart: "Restart “" + name + "”?",
+        uninstall: "Remove “" + name + "”? This uninstalls the Homebrew package. Config files in your home folder are left in place."
+      };
+      if (prompts[action] && !confirm(prompts[action])) return;
+      try {
+        await request("/api/action", { id, action });
+        const started = { open: "Opening ", quit: "Quitting ", start: "Starting ", stop: "Stopping ", restart: "Restarting ", uninstall: "Removing " };
+        notice((started[action] || "Updating ") + name + "…");
+        setTimeout(() => load(action === "uninstall"), action === "open" ? 300 : 800);
+      } catch (error) {
+        notice(error.message);
+      }
+    }
+
+    let loading = false;
+    async function load(fresh) {
+      if (loading) return;
+      loading = true;
+      try {
+        const response = await fetch("/api/snapshot" + (fresh ? "?fresh=1" : ""));
+        const payload = await response.json();
+        if (!response.ok || payload.error) throw Error(payload.error || "Refresh failed");
+        Object.assign(state, payload);
+        render();
+      } catch (error) {
+        notice("Could not refresh: " + error.message);
+      } finally {
+        loading = false;
+      }
+    }
+
+    document.getElementById("refresh").addEventListener("click", () => load(true));
+    document.getElementById("filter").addEventListener("input", render);
+    document.getElementById("process-filter").addEventListener("input", renderProcesses);
+    document.getElementById("mine-details").addEventListener("toggle", renderProcesses);
+    document.getElementById("system-details").addEventListener("toggle", renderSystem);
+    document.addEventListener("click", (event) => {
+      const tab = event.target.closest("[data-tab]");
+      if (tab) {
+        state.tab = tab.dataset.tab;
+        render();
+        return;
+      }
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      runAction(button.dataset.action, button.dataset.id, button.dataset.name);
+    });
+
+    load(true);
+    setInterval(() => load(false), 8000);
+  </script>
+</body>
+</html>
